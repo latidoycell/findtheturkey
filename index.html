@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Find the Turkey!</title>
+<style>
+:root{--bg:#f3ead2;--panel:#fffaf0;--ink:#3a2412;--muted:#7a6350;--accent:#c4501b;--ok:#2f7d32;--cell:#ead9a8;--ground:#b98a4e;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b2a22;--panel:#26382d;--ink:#f6e9cc;--muted:#bba98a;--accent:#ffa040;--ok:#8fd694;--cell:#2d4236;--ground:#6b4a2a}}
+:root[data-theme="dark"]{--bg:#1b2a22;--panel:#26382d;--ink:#f6e9cc;--muted:#bba98a;--accent:#ffa040;--ok:#8fd694;--cell:#2d4236;--ground:#6b4a2a}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;min-height:100%;padding:16px}
+.wrap{max-width:1100px;margin:0 auto}
+h1{font-family:Georgia,"Times New Roman",serif;font-size:clamp(2rem,6vw,3.4rem);margin:0;line-height:1.05}
+.sub{color:var(--muted);margin:6px 0 16px;font-size:1.1rem}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--panel);padding:12px 14px;border-radius:14px;margin-bottom:14px}
+.bar label{display:flex;gap:6px;align-items:center;font-size:1rem}
+input,select,button{font:inherit;color:var(--ink)}
+input[type=number],select{background:var(--bg);border:2px solid var(--muted);border-radius:10px;padding:8px 10px;width:92px}
+select{width:auto}
+button{cursor:pointer}
+.btn{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:9px 16px;font-weight:700}
+.btn.alt{background:transparent;color:var(--ink);border:2px solid var(--muted)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.stats{margin-left:auto;font-weight:700;font-size:1.1rem}
+#msg{min-height:3.2rem;font-size:clamp(1.2rem,3.4vw,1.7rem);font-weight:700;margin:4px 0 12px}
+#msg.win{color:var(--ok)}
+#forest{display:grid;grid-template-columns:repeat(5,1fr);gap:clamp(6px,1.5vw,16px)}
+.tree{position:relative;aspect-ratio:6/7;background:var(--cell);border:0;border-radius:18px;padding:0;overflow:hidden}
+.tree svg{position:absolute;inset:0;width:100%;height:100%;z-index:1}
+.tree .cn{transform-origin:60px 100px;transition:opacity .5s}
+.tree:hover:not(:disabled) svg{transform:translateY(-3px)}
+.tree .n{position:absolute;z-index:2;bottom:5%;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:clamp(.95rem,2.6vw,1.6rem);font-weight:800;min-width:2em;border-radius:99px;padding:0 .5em;text-align:center}
+.tree .tk{position:absolute;z-index:0;left:18%;width:64%;bottom:13%;opacity:0;transform:scale(.3);pointer-events:none}
+.tree .tk svg{position:static;width:100%;height:auto;display:block;overflow:visible}
+.tree.no .cn{opacity:.18}
+.tree.no .n{opacity:.5}
+.tree.shake .cn{animation:sh .45s}
+.tree.yes{box-shadow:0 0 0 4px var(--ok)}
+.tree.yes .cn{opacity:.35}
+.tree.yes .tk{animation:out 1.2s cubic-bezier(.3,1.2,.5,1) forwards}
+.tree.yes .tk svg{animation:wob .45s ease-in-out 1.2s infinite alternate;transform-origin:50% 90%}
+@keyframes out{0%{opacity:0;z-index:0;transform:translate(0,-12%) scale(.3)}25%{opacity:1;z-index:0;transform:translate(48%,-8%) scale(.55) rotate(10deg)}26%{z-index:3}55%{z-index:3;opacity:1;transform:translate(30%,-45%) scale(.95) rotate(-8deg)}100%{z-index:3;opacity:1;transform:translate(0,0) scale(1.1) rotate(0)}}
+@keyframes wob{from{transform:rotate(-5deg)}to{transform:rotate(5deg) translateY(-3%)}}
+@keyframes sh{20%{transform:rotate(-7deg)}40%{transform:rotate(7deg)}60%{transform:rotate(-4deg)}80%{transform:rotate(3deg)}}
+.leaf{position:fixed;pointer-events:none;font-size:2rem;animation:fall 1.6s ease-in forwards;z-index:5}
+@keyframes fall{to{transform:translateY(110vh) rotate(540deg);opacity:.2}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>🦃 Find the Turkey!</h1>
+<p class="sub">A turkey is hiding behind one tree. Click a tree to look behind it.</p>
+
+<div class="bar">
+  <label>Trees <select id="count"><option value="10">10 (5 × 2)</option><option value="20" selected>20 (5 × 4)</option></select></label>
+  <label><input type="checkbox" id="snd" checked> Sound 🔊</label>
+  <button class="btn alt" id="new">New game</button>
+  <div class="stats">Guesses: <span id="tries">0</span></div>
+</div>
+
+<div id="msg" aria-live="polite"></div>
+<div id="forest"></div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const pal=[['#d9531e','#f08a24','#f2b134'],['#a8232b','#d9531e','#f08a24'],['#e8a317','#f2c94c','#d9531e'],['#8c3b1a','#c4501b','#e8a317'],['#c0392b','#e67e22','#f1c40f']];
+const blobs=[[60,44,28],[36,58,23],[84,58,23],[46,30,21],[74,30,21],[60,64,22],[26,46,15],[94,46,15],[60,22,16]];
+let total,secret,tries,over;
+const TURKEY=(()=>{const fc=['#b5361f','#e07a1f','#f2b134','#8c3b1a'],S='#4a2c14';let f='';
+[-60,-40,-20,0,20,40,60].forEach((a,k)=>{f+='<ellipse cx="50" cy="34" rx="9.5" ry="27" fill="'+fc[k%4]+'" stroke="'+S+'" stroke-width="1.6" transform="rotate('+a+' 50 66)"/>'});
+[-40,-20,0,20,40].forEach((a,k)=>{f+='<ellipse cx="50" cy="44" rx="5" ry="16" fill="'+fc[(k+2)%4]+'" stroke="'+S+'" stroke-width="1" transform="rotate('+a+' 50 66)"/>'});
+f+='<path d="M42 86v10M58 86v10M36 96h12M52 96h12" stroke="#e8901a" stroke-width="3.2" stroke-linecap="round" fill="none"/>'
+ +'<ellipse cx="50" cy="68" rx="23" ry="20" fill="#8b5a2b" stroke="'+S+'" stroke-width="1.8"/>'
+ +'<ellipse cx="50" cy="74" rx="13" ry="11" fill="#c48a52"/>'
+ +'<ellipse cx="38" cy="68" rx="10" ry="13" fill="#a9743a" stroke="'+S+'" stroke-width="1.4" transform="rotate(-12 38 68)"/>'
+ +'<path d="M33 62q4 6 0 12M38 60q4 8 0 16" stroke="'+S+'" stroke-width="1" fill="none"/>'
+ +'<ellipse cx="60" cy="58" rx="8" ry="12" fill="#8b5a2b" stroke="'+S+'" stroke-width="1.6"/>'
+ +'<circle cx="64" cy="46" r="10" fill="#a0673a" stroke="'+S+'" stroke-width="1.8"/>'
+ +'<path d="M72 44l11 5-11 5z" fill="#f2a516" stroke="'+S+'" stroke-width="1.4" stroke-linejoin="round"/>'
+ +'<path d="M71 55q-1 9 4 8 3-1 2-8z" fill="#d62828" stroke="'+S+'" stroke-width="1.2"/>'
+ +'<path d="M66 38q-3-5 1-8" stroke="#d62828" stroke-width="3" stroke-linecap="round" fill="none"/>'
+ +'<circle cx="66" cy="43" r="3.4" fill="#fff" stroke="'+S+'" stroke-width=".9"/><circle cx="67" cy="43" r="1.6" fill="#111"/>';
+return '<svg viewBox="-6 0 112 100" aria-hidden="true">'+f+'</svg>'})();
+let ac;
+function ctx(){try{if(!$('snd').checked)return null;ac=ac||new(window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume();return ac}catch(e){return null}}
+function tone(f,t,d,type,v,slide){const c=ctx();if(!c)return;const o=c.createOscillator(),g=c.createGain(),s=c.currentTime+t;o.type=type;o.frequency.setValueAtTime(f,s);if(slide)o.frequency.exponentialRampToValueAtTime(slide,s+d);g.gain.setValueAtTime(.0001,s);g.gain.exponentialRampToValueAtTime(v,s+.02);g.gain.exponentialRampToValueAtTime(.0001,s+d);o.connect(g);g.connect(c.destination);o.start(s);o.stop(s+d+.05)}
+function gobble(t0){const c=ctx();if(!c)return;const s=c.currentTime+t0,o=c.createOscillator(),l=c.createOscillator(),lg=c.createGain(),g=c.createGain();o.type='sawtooth';o.frequency.setValueAtTime(380,s);o.frequency.linearRampToValueAtTime(250,s+.9);l.frequency.value=24;lg.gain.value=110;l.connect(lg);lg.connect(o.frequency);g.gain.setValueAtTime(.0001,s);g.gain.exponentialRampToValueAtTime(.16,s+.05);g.gain.exponentialRampToValueAtTime(.0001,s+.9);o.connect(g);g.connect(c.destination);o.start(s);l.start(s);o.stop(s+.95);l.stop(s+.95)}
+function wrongSound(){tone(310,0,.28,'sawtooth',.16,200);tone(220,.28,.5,'sawtooth',.16,110)}
+function winSound(){[523,659,784,1047].forEach((f,i)=>tone(f,i*.12,.3,'triangle',.25));tone(1047,.5,.7,'triangle',.25);gobble(.55)}
+
+function treeSVG(i){
+  const p=pal[(i*3+Math.floor(i/5))%pal.length],j=(i*37)%7-3;
+  let c='';
+  blobs.forEach((b,k)=>{
+    const col=p[(k+i)%3];
+    c+='<circle cx="'+(b[0]+(k%2?j:-j)*.6)+'" cy="'+(b[1]+(k%3-1)*j*.3)+'" r="'+b[2]+'" fill="'+col+'"/>';
+  });
+  blobs.forEach((b,k)=>{c+='<circle cx="'+(b[0]-b[2]*.3)+'" cy="'+(b[1]-b[2]*.35)+'" r="'+b[2]*.4+'" fill="#fff" opacity=".18"/>'});
+  for(let k=0;k<9;k++){const x=22+((k*29+i*13)%76),y=30+((k*17+i*7)%46);
+    c+='<ellipse cx="'+x+'" cy="'+y+'" rx="4" ry="2.2" fill="'+p[k%3]+'" stroke="#00000030" stroke-width=".6" transform="rotate('+(k*40)+' '+x+' '+y+')"/>'}
+  let g='';
+  for(let k=0;k<6;k++){const x=14+((k*23+i*11)%92);
+    g+='<ellipse cx="'+x+'" cy="'+(122+k%3*4)+'" rx="4.5" ry="2.2" fill="'+p[k%3]+'" transform="rotate('+(k*35)+' '+x+' '+(122+k%3*4)+')"/>'}
+  return '<svg viewBox="0 0 120 140" aria-hidden="true">'
+   +'<ellipse cx="60" cy="126" rx="50" ry="10" fill="var(--ground)" opacity=".55"/>'+g
+   +'<path d="M52 128 C55 108 56 92 55 76 L65 76 C64 92 65 108 68 128 Z" fill="#5a3a22"/>'
+   +'<path d="M57 90 L40 66 M63 86 L82 62 M60 80 L60 56" stroke="#5a3a22" stroke-width="4" stroke-linecap="round" fill="none"/>'
+   +'<path d="M57 100 L58 122 M62 96 L62 118" stroke="#3b2414" stroke-width="1.2" opacity=".5"/>'
+   +'<g class="cn">'+c+'</g></svg>';
+}
+
+function start(){
+  total=+$('count').value;
+  secret=1+Math.floor(Math.random()*total);
+  tries=0;over=false;
+  $('tries').textContent=0;
+  setMsg('Where is the turkey? Click a tree to look behind it.');
+  const f=$('forest');f.innerHTML='';
+  for(let i=1;i<=total;i++){
+    const b=document.createElement('button');
+    b.className='tree';b.dataset.n=i;
+    b.setAttribute('aria-label','Tree '+i);
+    b.innerHTML='<span class="tk">'+TURKEY+'</span>'+treeSVG(i)+'<span class="n">'+i+'</span>';
+    b.onclick=()=>guess(i);
+    f.appendChild(b);
+  }
+}
+function setMsg(t,win){const m=$('msg');m.textContent=t;m.className=win?'win':''}
+function leaf(el){
+  const r=el.getBoundingClientRect(),l=document.createElement('div');
+  l.className='leaf';l.textContent=Math.random()<.5?'🍂':'🍁';
+  l.style.left=(r.left+r.width/2)+'px';l.style.top=r.top+'px';
+  document.body.appendChild(l);setTimeout(()=>l.remove(),1700);
+}
+function guess(n){
+  if(over||!n||n<1||n>total)return;
+  const el=document.querySelector('.tree[data-n="'+n+'"]');
+  if(el.classList.contains('no'))return setMsg('Tree '+n+' was already checked. Try another!');
+  tries++;$('tries').textContent=tries;
+  if(n===secret){
+    over=true;el.classList.add('yes');winSound();
+    setMsg('Gobble gobble! 🦃 The turkey was behind tree '+n+'. You found it in '+tries+(tries===1?' guess!':' guesses!'),true);
+    for(let i=0;i<14;i++)setTimeout(()=>leaf(el),i*90);
+    return;
+  }
+  el.classList.add('no','shake');leaf(el);wrongSound();
+  setTimeout(()=>el.classList.remove('shake'),500);
+  let t='Nope! No turkey behind tree '+n+'.';
+  setMsg(t);
+}
+$('new').onclick=start;
+$('count').onchange=start;
+start();
+</script>
+</body>
+</html>
